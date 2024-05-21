@@ -1,6 +1,7 @@
 import subprocess
 import csv
 import argparse
+import sys
 
 # ANSI escape sequences for colored output
 GREEN = "\033[92m"
@@ -44,11 +45,14 @@ def get_best_move(engine, fen, depth):
     return None
 
 
-def test_positions(csv_file, engine_path, depth=20):
+def test_positions(csv_file, engine_path, depth=20, hash=64):
     correct_count = 0
     total_count = 0
 
     engine = start_engine(engine_path)
+
+    send_command(engine, "uci")
+    send_command(engine, f"setoption name Hash value {hash}")
 
     # Read and process the test position file
     with open(csv_file, newline='') as csvfile:
@@ -57,6 +61,11 @@ def test_positions(csv_file, engine_path, depth=20):
             total_count += 1
             fen = row['position']
             expected_bestmove = row['bestmove']
+
+            print(f"FEN: {fen}")
+            print(f"Expected best move: {expected_bestmove}", end='')
+            sys.stdout.flush()
+
             engine_bestmove = get_best_move(engine, fen, depth)
 
             if engine_bestmove == expected_bestmove:
@@ -65,7 +74,7 @@ def test_positions(csv_file, engine_path, depth=20):
             else:
                 correctness_msg = f"{RED}INCORRECT{RESET}, Engine found: {engine_bestmove}"
 
-            print(f"FEN: {fen}, Expected best move: {expected_bestmove}, {correctness_msg}")
+            print(f", {correctness_msg}")
 
     # Send the quit command to the engine and wait for it to terminate
     send_command(engine, 'quit')
@@ -84,12 +93,13 @@ def main():
     parser = argparse.ArgumentParser(description="Test a chess engine against a set of king safety positions.")
     parser.add_argument('engine_path', help='The path to the UCI-compatible chess engine executable.')
     parser.add_argument('depth', type=int, help='The search depth for the chess engine.')
+    parser.add_argument('--hash', default=64, type=int, help='The hash size for the chess engine.')
     parser.add_argument('--csv_file', default='positions.csv',
                         help='The path to the CSV file containing FEN positions and best moves.')
 
     args = parser.parse_args()
 
-    test_positions(args.csv_file, args.engine_path, args.depth)
+    test_positions(args.csv_file, args.engine_path, args.depth, args.hash)
 
 
 if __name__ == '__main__':
