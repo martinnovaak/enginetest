@@ -96,7 +96,7 @@ def test_positions(csv_file, engine_path, depth=20, hash=64, num_threads=1, num_
 def main():
     parser = argparse.ArgumentParser(description="Test a chess engine against a set of positions.")
     parser.add_argument('engine_path', help='The path to the UCI-compatible chess engine executable.')
-    parser.add_argument('depth', type=int, help='The search depth for the chess engine.')
+    parser.add_argument('--depth', type=int, help='The search depth for the chess engine.')
     parser.add_argument('--hash', default=64, type=int, help='The hash size for the chess engine.')
     parser.add_argument('--csv_file', default='king_safety.csv',
                         help='The path to the CSV file containing FEN positions and best moves.')
