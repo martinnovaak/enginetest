@@ -98,7 +98,7 @@ def main():
     parser.add_argument('engine_path', help='The path to the UCI-compatible chess engine executable.')
     parser.add_argument('depth', type=int, help='The search depth for the chess engine.')
     parser.add_argument('--hash', default=64, type=int, help='The hash size for the chess engine.')
-    parser.add_argument('--csv_file', default='positions.csv',
+    parser.add_argument('--csv_file', default='king_safety.csv',
                         help='The path to the CSV file containing FEN positions and best moves.')
     parser.add_argument('--threads', default=4, type=int, help='The number of threads to use.')
     parser.add_argument('--num_positions', type=int, help='The number of positions to load from the CSV file.')
