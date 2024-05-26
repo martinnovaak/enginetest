@@ -64,6 +64,7 @@ def test_positions(csv_file, engine_path, search_command, hash=64, num_threads=1
         reader = csv.DictReader(csvfile)
         positions = [(row['position'], row['bestmove']) for i, row in enumerate(reader) if num_positions is None or i < num_positions]
 
+    incorrect = []
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         futures = [
             executor.submit(evaluate_position, engine_path, fen, expected_bestmove, search_command, hash)
@@ -76,13 +77,22 @@ def test_positions(csv_file, engine_path, search_command, hash=64, num_threads=1
             print(f"Expected best move: {expected_bestmove}", end='')
             sys.stdout.flush()
 
+
             if is_correct:
                 correct_count += 1
                 correctness_msg = f"{GREEN}CORRECT{RESET}"
             else:
                 correctness_msg = f"{RED}INCORRECT{RESET}, Engine found: {engine_bestmove}"
+                incorrect.append((fen, engine_bestmove))
 
             print(f", {correctness_msg}")
+
+    with open("incorrect.csv", mode='w', newline='', encoding='utf-8') as outfile:
+        fieldnames = ['position', 'engine_move']
+        writer = csv.DictWriter(outfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for fen, bestmove in incorrect:
+            writer.writerow({'position': fen, 'engine_move': bestmove})
 
     success_percentage = (correct_count / total_count) * 100 if total_count > 0 else 0
 
