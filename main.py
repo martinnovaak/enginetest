@@ -98,6 +98,7 @@ def test_positions(csv_file, engine_path, search_command, hash=64, num_threads=1
 
     # Summary
     print("\nSummary of Results:")
+    print(f"Test suite: {csv_file}")
     print(f"Total positions: {total_count}")
     print(f"Correctly identified best moves: {correct_count}")
     print(f"Success rate: {success_percentage:.2f}%")
