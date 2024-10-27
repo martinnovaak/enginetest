@@ -111,7 +111,7 @@ def main():
     parser.add_argument('--hash', default=64, type=int, help='The hash size for the chess engine.')
     parser.add_argument('--csv_file', default='king_safety.csv',
                         help='The path to the CSV file containing FEN positions and best moves.')
-    parser.add_argument('--threads', default=4, type=int, help='The number of threads to use.')
+    parser.add_argument('--concurrency', default=4, type=int, help='The number of threads to use.')
     parser.add_argument('--num_positions', type=int, help='The number of positions to load from the CSV file.')
 
     args = parser.parse_args()
@@ -128,7 +128,7 @@ def main():
         print("Please specify either --depth or --nodes.")
         sys.exit(1)
 
-    test_positions(args.csv_file, args.engine, search_command, args.hash, args.threads, args.num_positions)
+    test_positions(args.csv_file, args.engine, search_command, args.hash, args.concurrency, args.num_positions)
 
 if __name__ == '__main__':
     main()
