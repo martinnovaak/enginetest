@@ -2,6 +2,7 @@ import subprocess
 import csv
 import argparse
 import sys
+from ast import literal_eval
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ANSI escape sequences for colored output
@@ -41,7 +42,7 @@ def get_best_move(engine, fen, search_command):
             return line.split()[1]
     return None
 
-def evaluate_position(engine_path, fen, expected_bestmove, search_command, hash):
+def evaluate_position(engine_path, fen, expected_bestmoves, search_command, hash):
     engine = start_engine(engine_path)
     send_command(engine, "uci")
     send_command(engine, f"setoption name Hash value {hash}")
@@ -51,10 +52,13 @@ def evaluate_position(engine_path, fen, expected_bestmove, search_command, hash)
     send_command(engine, 'quit')
     engine.wait()
 
-    if engine_bestmove == expected_bestmove:
-        return fen, expected_bestmove, engine_bestmove, True
-    else:
-        return fen, expected_bestmove, engine_bestmove, False
+    is_correct = engine_bestmove in expected_bestmoves
+    return fen, expected_bestmoves, engine_bestmove, is_correct
+
+def format_bestmoves(bestmoves):
+    if len(bestmoves) == 1:
+        return bestmoves[0]
+    return " or ".join(bestmoves)
 
 def test_positions(csv_file, engine_path, search_command, hash=64, num_threads=1, num_positions=None):
     correct_count = 0
@@ -62,21 +66,25 @@ def test_positions(csv_file, engine_path, search_command, hash=64, num_threads=1
 
     with open(csv_file, newline='') as csvfile:
         reader = csv.DictReader(csvfile)
-        positions = [(row['position'], row['bestmove']) for i, row in enumerate(reader) if num_positions is None or i < num_positions]
+        positions = [
+            (i + 1, row['position'], literal_eval(row['bestmove']))
+            for i, row in enumerate(reader)
+            if num_positions is None or i < num_positions
+        ]
 
+    total_positions = len(positions)
     incorrect = []
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         futures = [
-            executor.submit(evaluate_position, engine_path, fen, expected_bestmove, search_command, hash)
-            for fen, expected_bestmove in positions
+            executor.submit(evaluate_position, engine_path, fen, expected_bestmoves, search_command, hash)
+            for _, fen, expected_bestmoves in positions
         ]
-        for future in as_completed(futures):
+        for future, (index, fen, expected_bestmoves) in zip(as_completed(futures), positions):
             total_count += 1
-            fen, expected_bestmove, engine_bestmove, is_correct = future.result()
-            print(f"FEN: {fen}")
-            print(f"Expected best move: {expected_bestmove}", end='')
-            sys.stdout.flush()
-
+            fen, expected_bestmoves, engine_bestmove, is_correct = future.result()
+            formatted_bestmoves = format_bestmoves(expected_bestmoves)
+            print(f"{index}/{total_positions} FEN: {fen}")
+            print(f"Expected best moves: {formatted_bestmoves}", end='')
 
             if is_correct:
                 correct_count += 1
@@ -99,7 +107,7 @@ def test_positions(csv_file, engine_path, search_command, hash=64, num_threads=1
     # Summary
     print("\nSummary of Results:")
     print(f"Test suite: {csv_file}")
-    print(f"Total positions: {total_count}")
+    print(f"Total positions: {total_positions}")
     print(f"Correctly identified best moves: {correct_count}")
     print(f"Success rate: {success_percentage:.2f}%")
 
