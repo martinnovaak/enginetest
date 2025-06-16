@@ -15,6 +15,7 @@ BLUE = "\033[94m"
 CYAN = "\033[96m"
 MAGENTA = "\033[95m"
 
+
 def start_engine(engine_path):
     """Starts a UCI chess engine process."""
     try:
@@ -27,10 +28,10 @@ def start_engine(engine_path):
             bufsize=1
         )
     except FileNotFoundError:
-        print(f"{RED}Error: Engine not found at {engine_path}{RESET}", file=sys.stderr)
+        print(f"{RED}Error: Engine not found at {engine_path}{RESET}")
         raise FileNotFoundError(f"Engine not found: {engine_path}")
     except Exception as e:
-        print(f"{RED}Error starting engine {engine_path}: {e}{RESET}", file=sys.stderr)
+        print(f"{RED}Error starting engine {engine_path}: {e}{RESET}")
         raise Exception(f"Error starting engine {engine_path}: {e}")
 
 
@@ -38,6 +39,7 @@ def send_command(engine, command):
     """Sends a command to the engine's stdin."""
     engine.stdin.write(command + '\n')
     engine.stdin.flush()
+
 
 def read_response(engine):
     """Reads lines from the engine's stdout until 'bestmove' is encountered."""
@@ -48,6 +50,7 @@ def read_response(engine):
         if line.startswith('bestmove'):
             break
     return lines
+
 
 def get_engine_name(engine_path):
     """Starts an engine, gets its UCI 'id name', and quits it."""
@@ -70,6 +73,7 @@ def get_engine_name(engine_path):
         print(f"{RED}Warning: Could not get UCI name for {engine_path}. Using executable name. Error: {e}{RESET}")
         return os.path.basename(engine_path) # Fallback to executable name
 
+
 def get_best_move_from_engine(engine, fen, search_command, hash_size):
     """Gets the best move from a single engine for a given FEN."""
     send_command(engine, "ucinewgame")
@@ -89,6 +93,7 @@ def get_best_move_from_engine(engine, fen, search_command, hash_size):
             if len(parts) >= 2:
                 return parts[1]
     return None
+
 
 def format_bestmoves(bestmoves):
     """Formats a list of best moves for display."""
@@ -215,6 +220,7 @@ def test_engines_against_positions(csv_file, engine_configs, search_command, has
     print(f"\n{YELLOW}--- Summary of All Engine Results ---{RESET}")
     print(f"Test suite: {csv_file}")
     print(f"Total positions tested: {total_count}")
+    print(f"Search Setting: {search_command.replace('go ', '')}{RESET}")
 
     for engine_path, uci_name in engine_configs:
         correct_count = engine_correct_counts[engine_path]
