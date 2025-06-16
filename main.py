@@ -49,6 +49,27 @@ def read_response(engine):
             break
     return lines
 
+def get_engine_name(engine_path):
+    """Starts an engine, gets its UCI 'id name', and quits it."""
+    try:
+        engine_process = start_engine(engine_path)
+        send_command(engine_process, "uci")
+        name = os.path.basename(engine_path) # Default to executable name if UCI name isn't found
+
+        while True:
+            line = engine_process.stdout.readline().strip()
+            if line.startswith("id name"):
+                name = line.split("id name", 1)[1].strip()
+            elif line == "uciok":
+                break
+
+        send_command(engine_process, "quit")
+        engine_process.wait(timeout=5)
+        return name
+    except Exception as e:
+        print(f"{RED}Warning: Could not get UCI name for {engine_path}. Using executable name. Error: {e}{RESET}")
+        return os.path.basename(engine_path) # Fallback to executable name
+
 def get_best_move_from_engine(engine, fen, search_command, hash_size):
     """Gets the best move from a single engine for a given FEN."""
     send_command(engine, "ucinewgame")
@@ -78,13 +99,14 @@ def format_bestmoves(bestmoves):
     return " or ".join(bestmoves)
 
 
-def evaluate_multiple_engines_position(engine_paths, fen, expected_bestmoves, search_command, hash_size):
-    """Evaluates a single FEN position for multiple engines."""
+def evaluate_multiple_engines_position(engine_configs, fen, expected_bestmoves, search_command, hash_size):
+    """Evaluates a single FEN position for multiple engines.
+       engine_configs is a list of (engine_path, uci_name) tuples.
+    """
     results_for_position = []
     engine_processes = {}  # Store engine process objects to ensure they are quit
 
-    for engine_path in engine_paths:
-        engine_name = os.path.basename(engine_path)
+    for engine_path, uci_name in engine_configs:
         engine_bestmove = None
         is_correct = False
         try:
@@ -96,7 +118,7 @@ def evaluate_multiple_engines_position(engine_paths, fen, expected_bestmoves, se
             is_correct = engine_bestmove in expected_bestmoves if engine_bestmove else False
 
         except (FileNotFoundError, Exception) as e:
-            print(f"{RED}Error evaluating {engine_name} for FEN {fen}: {e}{RESET}", file=sys.stderr)
+            print(f"{RED}Error evaluating {uci_name} ({engine_path}) for FEN {fen}: {e}{RESET}")
             # Mark as incorrect if engine failed to run/return move
             is_correct = False
         finally:
@@ -106,26 +128,28 @@ def evaluate_multiple_engines_position(engine_paths, fen, expected_bestmoves, se
                     engine_processes[engine_path].wait(timeout=5)  # Wait with a timeout
                 except subprocess.TimeoutExpired:
                     engine_processes[engine_path].kill()  # Force kill if it doesn't quit
-                    print(f"{YELLOW}Warning: {engine_name} did not quit gracefully and was killed.{RESET}")
+                    print(f"{YELLOW}Warning: {uci_name} ({engine_path}) did not quit gracefully and was killed.{RESET}")
             elif engine_path in engine_processes and engine_processes[engine_path].poll() is not None:
                 # Process already terminated
                 pass
 
         results_for_position.append({
             'engine_path': engine_path,
-            'engine_name': engine_name,
+            'engine_name': uci_name,
             'bestmove': engine_bestmove,
             'is_correct': is_correct
         })
     return fen, expected_bestmoves, results_for_position
 
 
-def test_engines_against_positions(csv_file, engine_paths, search_command, hash_size=64, num_threads=1, num_positions=None):
-    """Tests multiple chess engines against a set of positions."""
+def test_engines_against_positions(csv_file, engine_configs, search_command, hash_size=64, num_threads=1, num_positions=None):
+    """Tests multiple chess engines against a set of positions.
+       engine_configs is a list of (engine_path, uci_name) tuples.
+    """
 
     # Initialize data structures for overall results
-    engine_correct_counts = {path: 0 for path in engine_paths}
-    engine_incorrect_positions = {path: [] for path in engine_paths}
+    engine_correct_counts = {path: 0 for path, _ in engine_configs}
+    engine_incorrect_positions = {path: [] for path, _ in engine_configs}
     total_count = 0
 
     with open(csv_file, newline='') as csvfile:
@@ -138,12 +162,12 @@ def test_engines_against_positions(csv_file, engine_paths, search_command, hash_
 
     total_positions = len(positions_data)
 
-    engine_names = [os.path.basename(path) for path in engine_paths]
-    print(f"Starting test for {len(engine_paths)} engines: {CYAN}{', '.join(engine_names)}{RESET} on {total_positions} positions...")
+    engine_uci_names = [name for _, name in engine_configs]
+    print(f"Starting test for {len(engine_configs)} engines: {CYAN}{', '.join(engine_uci_names)}{RESET} on {total_positions} positions...")
 
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         futures = {
-            executor.submit(evaluate_multiple_engines_position, engine_paths, fen, expected_bestmoves, search_command, hash_size): (index, fen, expected_bestmoves)
+            executor.submit(evaluate_multiple_engines_position, engine_configs, fen, expected_bestmoves, search_command, hash_size): (index, fen, expected_bestmoves)
             for index, fen, expected_bestmoves in positions_data
         }
 
@@ -163,12 +187,12 @@ def test_engines_against_positions(csv_file, engine_paths, search_command, hash_
 
             for engine_result in results_for_position:
                 engine_path = engine_result['engine_path']
-                engine_name = engine_result['engine_name']
+                uci_name = engine_result['engine_name']
                 engine_bestmove = engine_result['bestmove']
                 is_correct = engine_result['is_correct']
 
                 correctness_msg = f"{GREEN}CORRECT{RESET}" if is_correct else f"{RED}INCORRECT{RESET}"
-                print(f"Engine ({BLUE}{engine_name}{RESET}): {engine_bestmove}, Result: {correctness_msg}")
+                print(f"Engine ({BLUE}{uci_name}{RESET}): {engine_bestmove}, Result: {correctness_msg}")
 
                 if is_correct:
                     engine_correct_counts[engine_path] += 1
@@ -178,26 +202,25 @@ def test_engines_against_positions(csv_file, engine_paths, search_command, hash_
     # Write incorrect positions to CSV files for each engine
     print(f"\n{MAGENTA}--- Saving Incorrect Positions ---{RESET}")
     for engine_path, incorrect_list in engine_incorrect_positions.items():
-        engine_name = os.path.basename(engine_path)
-        output_filename = f"incorrect_{engine_name}.csv"
+        uci_name = next((name for path, name in engine_configs if path == engine_path), os.path.basename(engine_path))
+        output_filename = f"incorrect_{uci_name.replace(' ', '_').replace('/', '_')}.csv"
         with open(output_filename, mode='w', newline='', encoding='utf-8') as outfile:
             fieldnames = ['position', 'engine_move']
             writer = csv.DictWriter(outfile, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(incorrect_list)
-        print(f"{RED}Incorrect positions for {engine_name} saved to {output_filename}{RESET}")
+        print(f"{RED}Incorrect positions for {uci_name} saved to {output_filename}{RESET}")
 
     # Summary
     print(f"\n{YELLOW}--- Summary of All Engine Results ---{RESET}")
     print(f"Test suite: {csv_file}")
     print(f"Total positions tested: {total_count}")
 
-    for engine_path in engine_paths:
-        engine_name = os.path.basename(engine_path)
+    for engine_path, uci_name in engine_configs:
         correct_count = engine_correct_counts[engine_path]
         success_percentage = (correct_count / total_count) * 100 if total_count > 0 else 0
 
-        print(f"\n{BLUE}Engine: {engine_name}{RESET}")
+        print(f"\n{BLUE}Engine: {uci_name}{RESET}")
         print(f"    Correctly identified best moves: {correct_count}")
         print(f"    Success rate: {success_percentage:.2f}%")
 
@@ -230,7 +253,8 @@ def main():
         print(f"{RED}Error: Please specify either --depth or --nodes.{RESET}")
         sys.exit(1)
 
-    # Ensure all engine paths exist before starting tests
+    # Validate engine paths and get UCI names
+    engine_configs = [] # List of (path, uci_name) tuples
     for engine_path in args.engines:
         if not os.path.exists(engine_path):
             print(f"{RED}Error: Engine executable not found at '{engine_path}'. Please check the path.{RESET}")
@@ -239,7 +263,10 @@ def main():
             print(f"{RED}Error: '{engine_path}' is not a file. Please provide path to an executable file.{RESET}")
             sys.exit(1)
 
-    test_engines_against_positions(args.csv_file, args.engines, search_command, args.hash, args.concurrency, args.num_positions)
+        uci_name = get_engine_name(engine_path)
+        engine_configs.append((engine_path, uci_name))
+
+    test_engines_against_positions(args.csv_file, engine_configs, search_command, args.hash, args.concurrency, args.num_positions)
 
 
 if __name__ == '__main__':
