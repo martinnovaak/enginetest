@@ -12,8 +12,6 @@ RED = "\033[91m"
 RESET = "\033[0m"
 YELLOW = "\033[93m"
 BLUE = "\033[94m"
-CYAN = "\033[96m"
-MAGENTA = "\033[95m"
 
 
 def start_engine(engine_path):
@@ -99,9 +97,9 @@ def format_bestmoves(bestmoves):
     """Formats a list of best moves for display."""
     if not bestmoves:
         return "N/A"
-    if len(bestmoves) == 1:
-        return bestmoves[0]
-    return " or ".join(bestmoves)
+    if isinstance(bestmoves, list):
+        return " or ".join(bestmoves)
+    return str(bestmoves)
 
 
 def evaluate_multiple_engines_position(engine_configs, fen, expected_bestmoves, search_command, hash_size):
@@ -168,7 +166,7 @@ def test_engines_against_positions(csv_file, engine_configs, search_command, has
     total_positions = len(positions_data)
 
     engine_uci_names = [name for _, name in engine_configs]
-    print(f"Starting test for {len(engine_configs)} engines: {CYAN}{', '.join(engine_uci_names)}{RESET} on {total_positions} positions...")
+    print(f"Starting test for {len(engine_configs)} engines: {BLUE}{', '.join(engine_uci_names)}{RESET} on {total_positions} positions...")
 
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         futures = {
@@ -205,7 +203,7 @@ def test_engines_against_positions(csv_file, engine_configs, search_command, has
                     engine_incorrect_positions[engine_path].append({'position': fen, 'engine_move': engine_bestmove})
 
     # Write incorrect positions to CSV files for each engine
-    print(f"\n{MAGENTA}--- Saving Incorrect Positions ---{RESET}")
+    print(f"\n--- Saving Incorrect Positions ---")
     for engine_path, incorrect_list in engine_incorrect_positions.items():
         uci_name = next((name for path, name in engine_configs if path == engine_path), os.path.basename(engine_path))
         output_filename = f"incorrect_{uci_name.replace(' ', '_').replace('/', '_')}.csv"
@@ -214,7 +212,7 @@ def test_engines_against_positions(csv_file, engine_configs, search_command, has
             writer = csv.DictWriter(outfile, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(incorrect_list)
-        print(f"{RED}Incorrect positions for {uci_name} saved to {output_filename}{RESET}")
+        print(f"Incorrect positions for {uci_name} saved to {output_filename}")
 
     # Summary
     print(f"\n{YELLOW}--- Summary of All Engine Results ---{RESET}")
